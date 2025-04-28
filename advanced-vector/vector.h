@@ -20,16 +20,15 @@ public:
     RawMemory &operator=(const RawMemory &rhs) = delete;
 
     RawMemory(RawMemory &&other) noexcept
-        : buffer_(std::move(other.buffer_)), capacity_(std::move(other.capacity_)) {}
+    {
+        Swap(other);
+    }
 
     RawMemory &operator=(RawMemory &&rhs) noexcept
     {
         if (this != &rhs)
         {
-            buffer_ = std::move(rhs.buffer_);
-            capacity_ = std::move(rhs.capacity_);
-            rhs.buffer_ = nullptr;
-            rhs.capacity_ = 0;
+            Swap(rhs);
         }
         return *this;
     }
@@ -137,17 +136,7 @@ public:
             }
             else
             {
-                if (rhs.size_ < size_)
-                {
-                    std::copy(rhs.data_.GetAddress(), rhs.data_.GetAddress() + rhs.size_, data_.GetAddress());
-                    std::destroy_n(data_.GetAddress() + rhs.size_, size_ - rhs.size_);
-                }
-                else
-                {
-                    std::copy(rhs.data_.GetAddress(), rhs.data_.GetAddress() + size_, data_.GetAddress());
-                    std::uninitialized_copy_n(rhs.data_.GetAddress() + size_, rhs.size_ - size_, data_.GetAddress() + size_);
-                }
-                size_ = rhs.size_;
+                CopyFromRhsVector(rhs);
             }
         }
         return *this;
@@ -251,13 +240,17 @@ public:
 
     void PopBack()
     {
-        --size_;
-        std::destroy_at(data_.GetAddress() + size_);
+        if (size_ != 0)
+        {
+            --size_;
+            std::destroy_at(data_.GetAddress() + size_);
+        }
     }
 
     template <typename... Args>
     iterator Emplace(const_iterator pos, Args &&...args)
     {
+        assert(pos >= begin() && pos < end());
         size_t distance = pos - begin();
         if (size_ < data_.Capacity())
         {
@@ -309,6 +302,7 @@ public:
 
     iterator Erase(const_iterator pos)
     {
+        assert(pos >= begin() && pos < end());
         size_t shift = pos - begin();
         std::move(begin() + shift + 1, end(), begin() + shift);
         PopBack();
@@ -369,4 +363,19 @@ public:
 private:
     RawMemory<T> data_;
     size_t size_ = 0;
+
+    void CopyFromRhsVector(const Vector &rhs)
+    {
+        std::copy(rhs.data_.GetAddress(), rhs.data_.GetAddress() + std::min(rhs.size_, size_), data_.GetAddress());
+
+        if (rhs.size_ < size_)
+        {
+            std::destroy_n(data_.GetAddress() + rhs.size_, size_ - rhs.size_);
+        }
+        else
+        {
+            std::uninitialized_copy_n(rhs.data_.GetAddress() + size_, rhs.size_ - size_, data_.GetAddress() + size_);
+        }
+        size_ = rhs.size_;
+    }
 };
